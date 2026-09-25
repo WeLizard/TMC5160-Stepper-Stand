@@ -288,9 +288,11 @@ def run():
         # An external encoder calibration updates the base before rendering flags.
         bench.state['axes'][0]['config']['zeroValid'] = 1
         bench.state['revision'] += 1
-        open_details(page, '#config details[data-group*="SSI"]')
         expect(page.locator('#c_zeroValid')).to_be_checked()
         expect(page.locator('#c_zeroValid')).to_be_enabled()
+        # Wait for the refreshed form before opening its disclosure.
+        open_details(page, '#config details[data-group*="SSI"]')
+        expect(page.locator('#c_zeroValid')).to_be_visible()
         page.uncheck('#c_zeroValid')
         page.click('#save')
         poll(page)
