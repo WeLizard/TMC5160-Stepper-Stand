@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stepper Stand · две оси</title>
+<style>
+:root{font:16px/1.45 system-ui,sans-serif;color:#172638;background:#f2f5f8}*{box-sizing:border-box}body{margin:0}header{position:sticky;top:0;background:#142334;color:white;padding:14px 22px;display:flex;gap:14px;align-items:center;z-index:2;flex-wrap:wrap}h1{font-size:20px;margin:0 auto 0 0}main{max-width:1250px;margin:auto;padding:20px}.notice{border-left:5px solid #bb6800;background:#fff3dd;padding:12px;margin-bottom:18px}section{background:white;padding:20px;border:1px solid #dce3eb;border-radius:10px;margin-bottom:18px}h2{font-size:20px;margin:0 0 14px}h3{font-size:17px}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #b9c6d5;border-radius:6px;background:#eef3f8;padding:9px 14px}button:hover{background:#dfe9f4}button.primary{background:#245e99;color:white}button.stop{background:#ffdc8f;color:#302500;font-weight:750}button.danger{background:#bf2833;color:white;font-weight:750}button:disabled{opacity:.5;cursor:wait}input,select{width:100%;padding:8px;border:1px solid #acbacb;border-radius:5px}input[type=checkbox]{width:auto}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}label{display:block;font-size:14px}label input,label select{margin-top:4px}small,.muted{color:#53677c}.readout{font:600 28px/1.5 ui-monospace,monospace}.state{font-weight:700;color:#315d8e}.error{color:#b31e2c;font-weight:650}.meter{font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}details{margin-top:16px}summary{cursor:pointer;font-weight:650}pre{white-space:pre-wrap;max-height:260px;overflow:auto;margin:10px 0 0;font-size:13px}#connection{font-size:13px}.axes{display:flex;gap:8px;margin-bottom:14px}a{color:#245e99}fieldset{border:1px solid #dce3eb;margin:12px 0;padding:12px}legend{font-weight:650}@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}header{padding:10px}main{padding:10px}}
+</style>
+<header><h1>Stepper Stand · v2</h1><span id="connection">Подключение…</span><button id="claim">Взять управление</button><button class="stop" id="stop">СТОП ВСЁ</button><button class="danger" id="estop">АВАРИЙНО / СНЯТЬ ТОК</button></header>
+<main>
+<div class="notice"><b>Опытная прошивка. Первый запуск — 24 В, без нагрузки, на малом токе.</b> На показанном переходнике конденсатор 35 В: 48 В подавать нельзя. Веб-кнопка не заменяет физическую аварийную цепь. Закрытие или скрытие этой вкладки останавливает тест.</div>
+<section><div class="row"><button id="ack">Подтвердить готовность / сбросить аварию</button><span id="safety"></span></div><small>После включения питания оси всегда выключены. Отпускание аварийной кнопки само движение не запускает. «Стоп» тормозит; «Аварийно» снимает удержание.</small></section>
+<div class="grid"><section id="card0"></section><section id="card1"></section></div>
+<section>
+<div class="axes"><button data-axis="0" class="primary">Мотор 1</button><button data-axis="1">Мотор 2</button></div>
+<h2>Ручное управление · <span id="axisName">Мотор 1</span></h2>
+<div class="fields"><label>Угол выходного вала, °<input id="angle" type="number" value="45" step="0.1"></label><label>Команда<select id="relative"><option value="false">В абсолютную точку</option><option value="true">От текущей позиции</option></select></label><div><small>Пуск сам включает драйвер. Ручное HOLD не требуется.</small><br><button class="primary" id="move">Переместить</button></div></div>
+<p class="row"><button data-jog="-1">Подвинуть −1°</button><button data-jog="1">Подвинуть +1°</button><button id="hold">Удерживать</button><button id="release">Снять ток</button><button id="zero">Эта позиция = 0°</button></p>
+<small>Без установленного нуля разрешены только малые относительные перемещения до 2°. После снятия тока, аварии или перезапуска ноль считается потерянным.</small>
+<hr><h3>Поиск и проверка рабочего диапазона</h3><div class="row"><button id="home">Найти исходную точку</button><button id="scan">Найти два упора → центр</button><button id="encoderRef">Взять позицию с энкодера</button><button id="encoderZero">Калибровать ноль энкодера здесь</button></div>
+<p class="muted">Поиск двух упоров — отдельная наладочная операция, а не бесконечные удары. После измерения задайте рабочие углы внутри диапазона с запасом. StallGuard требует индивидуальной настройки тока, скорости и SGT.</p>
+<h3>Автотест между углами</h3><div class="fields"><label>Левая точка, °<input id="testLow" type="number" value="-45"></label><label>Правая точка, °<input id="testHigh" type="number" value="45"></label><label>Полных циклов<input id="cycles" type="number" value="10" min="1" max="10000"></label><label>Пауза в точке, мс<input id="dwell" type="number" value="500" min="0" max="30000"></label></div>
+<p class="row"><button id="test" class="primary">Запустить автотест</button><button id="range45">−45° … +45°</button><button id="range90">−90° … +90°</button></p><small>Цикл = левая → правая → левая. Движение неблокирующее; «Стоп» отменяет продолжение последовательности.</small>
+<details><summary>Параметры выбранного мотора и датчиков</summary>
+<p>Для применения отключите обе оси и соленоид. Ток не определяется размером NEMA: используйте паспорт именно вашего двигателя. Изменение масштаба требует нового нуля. Нет автоматического переноса старой EEPROM.</p>
+<div id="config"></div><p class="row"><button id="save" class="primary">Применить и сохранить</button><button id="reload">Прочитать настройки заново</button></p>
+<small>frameBits / stBits / mtBits / shift задаются по полному коду AC36, а не только по названию товара. Декодируется полное Gray-слово позиции. Энкодер используется на выходном валу; многовитковое непрерывное позиционирование и автоматическая сервокоррекция не включены.</small>
+</details></section>
+<section><h2>Бистабильный соленоид</h2><p id="solStatus"></p><div class="fields"><label>Импульс, мс<input id="solDuration" type="number" value="100" min="20" max="500"></label><label>Остывание, мс<input id="solDwell" type="number" value="500" min="250" max="30000"></label><label>Циклы A → B<input id="solCycles" type="number" value="10" min="1" max="10000"></label></div><p class="row"><button id="solEnable">Разрешить соленоид</button><button id="solRelease">Отключить соленоид</button><button data-sol="0">Импульс A</button><button data-sol="1">Импульс B</button><button id="solTest">Тест A ⇄ B</button></p><small>Датчик A — GPIO32, B — GPIO33, активный LOW. Если после импульса нужный датчик не сработал за 1 с, тест прекращается. ENA-перемычка на L298N должна быть снята.</small></section>
+<section><h2>Результаты команд</h2><p id="message"></p><pre id="log"></pre><button id="export">Сохранить диагностику JSON</button></section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const client=crypto.getRandomValues(new Uint32Array(1))[0]||1;
+let selected=0,latest=null,own=false,loaded=false,polling=false,boot=null;
+const waiting=new Map(),lines=[];
+const groups=[
+['Двигатель', [['present','Драйвер установлен','flag'],['commissioned','Проводка, ток и питание проверены','flag'],['fullSteps','Полных шагов на оборот'],['microsteps','Микрошагов'],['gear','Обороты мотора / оборот выхода'],['rsense','R sense, Ом'],['current','Рабочий ток, мА RMS'],['hold','Доля тока удержания'],['reverse','Инвертировать направление','flag']]],
+['Рабочее движение', [['speed','Скорость выхода, °/с'],['accel','Ускорение, °/с²'],['decel','Замедление, °/с²'],['low','Нижний рабочий угол, °'],['high','Верхний рабочий угол, °']]],
+['Поиск исходной точки', [['homeMethod','Метод: 0 нет / 1 Холл / 2 StallGuard'],['homeHall','Холл для нуля: 0 MIN / 1 CENTER'],['hallMask','Маска Холлов: MIN=1, CENTER=2, MAX=4'],['hardLimits','MIN/MAX также подключены к REFL/REFR','flag'],['homeCoordinate','Координата найденной точки, °'],['homeCurrent','Ток поиска, мА RMS'],['homeSpeed','Скорость поиска, °/с'],['travel','Максимальный поиск за проход, °'],['homeTimeout','Общее время поиска, мс'],['backoff','Отход от упора, °'],['sgMinSpeed','Нижняя рабочая скорость SG, °/с'],['sgt','SGT от −64 до +63'],['sgTuned','StallGuard настроен на этом механизме','flag']]],
+['SSI / Hengstler AC36', [['encoder','Энкодер подключён через RS-422','flag'],['frameBits','Всего информационных тактов'],['stBits','Бит на оборот'],['mtBits','Бит количества оборотов'],['shift','Младших служебных бит после позиции'],['grayCode','Код Грея (иначе Binary)','flag'],['frameConfirmed','Формат и осциллограмма проверены','flag'],['encoderReverse','Инвертировать угол энкодера','flag'],['encoderTolerance','Допуск ошибки, °'],['encoderZero','Сохранённый отсчёт нуля','readonly'],['zeroValid','Ноль откалиброван (можно снять)','flag']]]
+];
+function log(text,error=false){lines.unshift(new Date().toLocaleTimeString()+' '+text);$('log').textContent=lines.slice(0,80).join('\n');$('message').textContent=text;$('message').className=error?'error':'';}
+async function api(op,data={}) {
+  const res=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,client,axis:selected,...data}),signal:AbortSignal.timeout(3000)});
+  const ans=await res.json(); if(!res.ok)throw Error(ans.error||res.status);
+  if(ans.accepted_id){waiting.set(ans.accepted_id,op);log(`Команда ${ans.accepted_id} принята; ожидаю результат.`);}return ans;
+}
+function action(fn){return async()=>{try{await fn();}catch(e){log(e.message,true);}};}
+function numeric(id){const v=Number($(id).value);if(!Number.isFinite(v)||$(id).value==='')throw Error('Заполните числовое поле: '+id);return v;}
+function form(){if(!latest)return;const c=latest.axes[selected].config;$('config').replaceChildren();for(const [title,fields]of groups){const box=document.createElement('fieldset'),legend=document.createElement('legend'),grid=document.createElement('div');legend.textContent=title;grid.className='fields';box.append(legend,grid);for(const [key,label,type]of fields){const l=document.createElement('label'),input=document.createElement('input');l.textContent=label;input.id='c_'+key;if(type==='flag'){input.type='checkbox';input.checked=Boolean(c[key]);}else{input.type='number';input.step='any';input.value=c[key];input.readOnly=type==='readonly';}l.append(input);grid.append(l);} $('config').append(box);}loaded=true;}
+function render(s){
+ if(boot!==null&&boot!==s.boot){own=false;waiting.clear();log('Контроллер перезапущен. Повторите готовность и установку нуля.',true);}boot=s.boot;
+ own=own&&s.owner===client;$('connection').textContent=own?'Управление у этой вкладки':'Только наблюдение';
+ $('safety').textContent=s.physical_stop?'Физическая аварийная цепь разомкнута':s.emergency?'Требуется подтверждение готовности':'Готовность подтверждена';$('safety').className=s.emergency?'error':'state';
+ for(let i=0;i<2;i++){const a=s.axes[i],card=$('card'+i);card.replaceChildren();const title=document.createElement('h2');title.textContent='Мотор '+(i+1);const value=document.createElement('div');value.className='readout';value.textContent=a.position.toFixed(2)+'°';const info=document.createElement('div');info.className='meter';info.textContent=`${a.state} · ${a.referenced?'ноль установлен':'ноль неизвестен'}\nЦель ${a.target.toFixed(2)}° · ${a.speed.toFixed(2)}°/с · циклов ${a.cycles}\nSPI ${a.healthy?'OK':'не готов'} · Холлы ${a.halls.toString(2).padStart(3,'0')} (MAX/CENTER/MIN)\nSG_RESULT ${a.sg} · ток расч. ${a.calculated_current_mA.toFixed(0)} мА\nSSI ${a.encoder_valid?'кадр OK':'не проверен/ошибка'} · ${a.encoder_degrees.toFixed(2)}° · raw 0x${a.encoder_raw_hex}`;const fault=document.createElement('p');fault.className='error';fault.textContent=a.fault;if(a.measured){const p=document.createElement('p');p.textContent=`Измеренные границы: ${a.measured_low.toFixed(2)}° … ${a.measured_high.toFixed(2)}°`;card.append(p);}card.append(title,value,info,fault);}
+ for(const r of s.results){if(waiting.has(r.id)){const op=waiting.get(r.id);waiting.delete(r.id);log(`#${r.id} ${op}: ${r.result}`,r.result!=='OK');if(op==='config'&&r.result==='OK')form();}}
+ const sol=s.solenoid;$('solStatus').textContent=`${sol.enabled?'Разрешён':'Отключён'} · ${sol.busy?'Работает':'Покой'} · Холлы ${sol.halls} · переключений ${sol.switches} · ошибок ${sol.failures}`;
+ if(!loaded)form();
+}
+async function poll(){if(polling)return;polling=true;try{const res=await fetch('/api/status',{cache:'no-store',signal:AbortSignal.timeout(2000)});if(!res.ok)throw Error('Нет статуса');latest=await res.json();render(latest);}catch(e){$('connection').textContent='Связь потеряна — движение должно остановиться';own=false;}finally{polling=false;}}
+$('claim').onclick=action(async()=>{await api('claim');own=true;log('Управление получено. Вкладку необходимо держать открытой.');});
+$('stop').onclick=action(()=>api('stop'));$('estop').onclick=action(()=>api('estop'));$('ack').onclick=action(()=>api('ack'));
+$('move').onclick=action(()=>api('move',{value:numeric('angle'),relative:$('relative').value==='true'}));
+$('hold').onclick=action(()=>api('hold'));$('release').onclick=action(()=>api('release'));
+$('zero').onclick=action(()=>{if(confirm('Механизм действительно в выбранном нуле? Это не поиск датчика.'))return api('zero');});
+$('home').onclick=action(()=>{if(confirm('Проверены ток, направление, свободный ход и аварийная кнопка? Поиск ограничен расстоянием и временем.'))return api('home');});
+$('scan').onclick=action(()=>{if(confirm('Будут найдены оба физических упора на малом токе и переопределён центр. Это наладочный проход. Ноль SSI перед этим нужно сбросить. Продолжить?'))return api('scan');});
+$('encoderRef').onclick=action(()=>api('encoder_ref'));
+$('encoderZero').onclick=action(()=>{if(confirm('Эта физическая позиция будет сохранена как ноль энкодера и оси. Продолжить?'))return api('encoder_zero');});
+$('test').onclick=action(()=>api('test',{low:numeric('testLow'),high:numeric('testHigh'),cycles:numeric('cycles'),dwell:numeric('dwell')}));
+$('range45').onclick=()=>{$('testLow').value=-45;$('testHigh').value=45;};$('range90').onclick=()=>{$('testLow').value=-90;$('testHigh').value=90;};
+$('reload').onclick=form;
+$('save').onclick=action(()=>{const config={};for(const [,fields]of groups)for(const [key,,type]of fields)config[key]=type==='flag'?Number($('c_'+key).checked):numeric('c_'+key);return api('config',{config,revision:latest.revision});});
+for(const b of document.querySelectorAll('[data-axis]'))b.onclick=()=>{selected=Number(b.dataset.axis);$('axisName').textContent='Мотор '+(selected+1);document.querySelectorAll('[data-axis]').forEach(e=>e.className=Number(e.dataset.axis)===selected?'primary':'');form();};
+for(const b of document.querySelectorAll('[data-jog]'))b.onclick=action(()=>api('jog',{value:Number(b.dataset.jog)}));
+$('solEnable').onclick=action(()=>api('sol_enable'));$('solRelease').onclick=action(()=>api('sol_release'));
+for(const b of document.querySelectorAll('[data-sol]'))b.onclick=action(()=>api('sol_pulse',{axis:Number(b.dataset.sol),duration:numeric('solDuration'),dwell:numeric('solDwell')}));
+$('solTest').onclick=action(()=>api('sol_test',{axis:0,duration:numeric('solDuration'),dwell:numeric('solDwell'),cycles:numeric('solCycles')}));
+$('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(latest,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='bench-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+setInterval(()=>{if(own&&!document.hidden)api('heartbeat').catch(()=>{own=false;});},400);
+const stopOnLeave=()=>{if(own){navigator.sendBeacon('/api/command',new Blob([JSON.stringify({op:'stop'})],{type:'application/json'}));own=false;}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopOnLeave();});window.addEventListener('pagehide',stopOnLeave);
+setInterval(poll,500);poll();
+</script></html>
