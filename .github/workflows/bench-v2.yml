@@ -1,0 +1,45 @@
+name: Bench v2 verification
+on:
+  push:
+    branches: [feature/dual-axis-ssi-bench]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: bash bench_v2/tests/run.sh
+      - run: pip install platformio==6.1.18
+      - run: pio run -d bench_v2
+      - run: pio run -d bench_v2 -t buildfs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-v2-experimental-build
+          if-no-files-found: error
+          path: |
+            bench_v2/.pio/build/esp32doit-devkit-v1/firmware.bin
+            bench_v2/.pio/build/esp32doit-devkit-v1/bootloader.bin
+            bench_v2/.pio/build/esp32doit-devkit-v1/partitions.bin
+            bench_v2/.pio/build/esp32doit-devkit-v1/littlefs.bin
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install playwright==1.58.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python bench_v2/tests/ui_smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-v2-ui-test-screenshots
+          path: bench_v2/.native/ui-*.png
