@@ -126,6 +126,7 @@ def run():
 
         def load_page(saved=None):
             page = context.new_page()
+            page.set_default_timeout(7000)
             page.on('pageerror', lambda e: errors.append(str(e)))
             page.on('dialog', lambda d: d.accept())
             if in_memory:
@@ -144,12 +145,13 @@ def run():
                 HTMLAnchorElement.prototype.click=function(){};
                 navigator.sendBeacon=()=>true;
                 </script>""".replace('SAVED_VALUES', json.dumps(saved or {}))
-                page.set_content(shim + HTML)
+                page.set_content(HTML.replace("<head>", "<head>" + shim, 1))
             else:
                 page.goto('http://bench.test/')
             return page
 
         page = load_page()
+        assert page.evaluate('document.compatMode') == 'CSS1Compat'
         expect(page.locator('#c_gear')).to_have_value('1')
         # A spectator cannot move; stops remain reachable even without ownership.
         expect(page.locator('#move')).to_be_disabled()
@@ -283,6 +285,17 @@ def run():
         page.click('#reload')
         expect(page.locator('#c_current')).to_have_value('480')
 
+        # An external encoder calibration updates the base before rendering flags.
+        bench.state['axes'][0]['config']['zeroValid'] = 1
+        bench.state['revision'] += 1
+        open_details(page, '#config details[data-group*="SSI"]')
+        expect(page.locator('#c_zeroValid')).to_be_checked()
+        expect(page.locator('#c_zeroValid')).to_be_enabled()
+        page.uncheck('#c_zeroValid')
+        page.click('#save')
+        poll(page)
+        assert bench.state['axes'][0]['config']['zeroValid'] == 0
+
         # Manual zero, bounded autotest, and shortcuts preserve the existing API.
         page.click('#tab-home')
         page.click('#zero')
@@ -361,7 +374,11 @@ def run():
         (ROOT / '.native').mkdir(exist_ok=True)
         for label, width, height in [('desktop', 1440, 1080), ('mobile', 390, 844), ('small', 320, 740)]:
             page.set_viewport_size({'width': width, 'height': height})
-            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), label
+            page.screenshot(path=str(ROOT / f'.native/ui-{label}.png'), full_page=True)
+            overflow = page.evaluate('''() => [...document.querySelectorAll('body *')]
+                .filter(e => e.getBoundingClientRect().right > innerWidth + 1)
+                .map(e => ({tag:e.tagName,id:e.id,cls:e.className,width:e.getBoundingClientRect().width}))''')
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (label, overflow)
             box = page.locator('#estop').bounding_box()
             assert box and box['y'] >= 0 and box['y'] + box['height'] <= height
             page.screenshot(path=str(ROOT / f'.native/ui-{label}.png'), full_page=True)
